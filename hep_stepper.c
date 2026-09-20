@@ -3,8 +3,15 @@
 
 #include "common.h"
 #include "tmc2130.h"
+#include "stepper_controller.h"
 
 #define DRV_EN 11   // driver enable pin (active low)
+
+// Timers
+struct repeating_timer servo_timer;
+
+stepper_t *stepper;
+bool direction = true;
 
 // Helper: write a 32-bit value to a TMC2130 register.
 static void write_reg (trinamic_motor_t motor, tmc2130_regaddr_t reg, uint32_t value)
@@ -25,8 +32,16 @@ static uint32_t read_reg (trinamic_motor_t motor, tmc2130_regaddr_t reg)
     return datagram.payload.value;
 }
 
+bool servo_timer_callback(struct repeating_timer *t) {
+    stepper_compute(stepper);
+    return true;
+}
+
 int main() {
     stdio_init_all();
+    stepper = stepper_init(9, 0, 200.0, 250.0, 100.0, 50.0);
+    // Timer for servo control
+    add_repeating_timer_ms(-1, servo_timer_callback, NULL, &servo_timer);
     sleep_ms(2000);
 
     printf("SPI master pre TMC2130 startuje...\n");
@@ -42,7 +57,7 @@ int main() {
     sleep_ms(10);
 
     // Set current (IHOLD=6, IRUN=31, IHOLDDELAY=15)
-    write_reg(motor, TMC2130Reg_IHOLD_IRUN, 0x00061F0F);
+    write_reg(motor, TMC2130Reg_IHOLD_IRUN, 0x000F1006);
     sleep_ms(10);
 
     // Chopperer enable (TOFF=3)
@@ -77,6 +92,15 @@ int main() {
         if(drv.s2ga || drv.s2gb) printf("  ERROR: Short circuit\n");
         if(drv.ola || drv.olb)   printf("  WARNING: Open load\n");
 
+        if (stepper_is_standstill(stepper)) {
+            if (direction) {
+                stepper_goto(stepper, stepper_get_position(stepper) + 100.0, 60.0);
+                direction = false;
+            } else {
+                stepper_goto(stepper, stepper_get_position(stepper) - 100.0, 60.0);
+                direction = true;
+            }
+        }
         sleep_ms(500);
     }
 }
