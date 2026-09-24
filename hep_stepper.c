@@ -39,7 +39,7 @@ bool servo_timer_callback(struct repeating_timer *t) {
 
 int main() {
     stdio_init_all();
-    stepper = stepper_init(9, 0, 200.0, 250.0, 100.0, 50.0);
+    stepper = stepper_init(9, 0, 200.0, 512.0, 100.0, 50.0);
     // Timer for servo control
     add_repeating_timer_ms(-1, servo_timer_callback, NULL, &servo_timer);
     sleep_ms(2000);
@@ -92,12 +92,18 @@ int main() {
         if(drv.s2ga || drv.s2gb) printf("  ERROR: Short circuit\n");
         if(drv.ola || drv.olb)   printf("  WARNING: Open load\n");
 
+        uint32_t lost = read_reg(motor, TMC2130Reg_LOST_STEPS);
+
+        if (lost != 0) {
+            printf("ERROR: DcStep lost steps = %lu\n", lost);
+        }
+
         if (stepper_is_standstill(stepper)) {
             if (direction) {
-                stepper_goto(stepper, stepper_get_position(stepper) + 100.0, 60.0);
+                stepper_goto(stepper, stepper_get_position(stepper) + 1.0, 0.2);
                 direction = false;
             } else {
-                stepper_goto(stepper, stepper_get_position(stepper) - 100.0, 60.0);
+                stepper_goto(stepper, stepper_get_position(stepper) - 1.0, 10.0);
                 direction = true;
             }
         }
