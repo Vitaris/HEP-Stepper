@@ -6,10 +6,12 @@
 #include "stepdir_counter.pio.h"
 #include "step_generator.pio.h"
 #include "servo_control.h"
+#include <math.h>
 
 #define CYCLE_TIME 0.001 // 1 ms cycle time
+#define MIN_STEP_FREQ 0.025f  // steps/s; below this the axis is treated as stopped (avoids div-by-zero / huge delays)
 
-void update_step_generator(stepper_t* stepper, uint32_t freq, bool direction);
+void update_step_generator(stepper_t* stepper, float freq, bool direction);
 
 static bool pio_initialized = false;
 static uint step_generator_offset = 0; 
@@ -25,7 +27,7 @@ struct stepper {
     uint8_t pin;
     uint32_t step;
     float position;
-    float microsteps;
+    float microsteps_per_rev;
     float max_speed;
     float max_acceleration;
     servo_control_t* servo_control; // Pointer to servo control structure
@@ -39,7 +41,7 @@ stepper_t* stepper_init(const uint8_t pin, const uint8_t sm,
     stepper_t* stepper = calloc(1, sizeof(struct stepper));
     stepper->pin = pin;
     stepper->sm = sm;
-    stepper->microsteps = steps_per_rev * microsteps;
+    stepper->microsteps_per_rev = steps_per_rev * microsteps;
     stepper->max_speed = max_speed;
     stepper->max_acceleration = max_acceleration;
 
@@ -71,17 +73,22 @@ void stepper_compute(stepper_t* const stepper) {
     int32_t steps_count = stepdir_counter_get_count(encoder_pio, stepper->sm);
 
     // Convert to steps, steps per revolution, microsteps
-    stepper->position = (float)(steps_count) * 2.0 / stepper->microsteps; 
+    stepper->position = (float)(steps_count) / stepper->microsteps_per_rev; 
 
     // Compute the next position based on the servo control logic
     servo_control_compute(stepper->servo_control);
 
     // Calculate the speed based on the next position
     float position_error = servo_control_get_next_position(stepper->servo_control) - stepper->position;
-    float steps_per_second = position_error * stepper->microsteps * 0.5 / CYCLE_TIME;
-    
-    // Update the stepper speed                    
-    stepper_update_speed(stepper, (int32_t)steps_per_second);
+    float steps_per_second = position_error * stepper->microsteps_per_rev * 0.5 / CYCLE_TIME;
+
+    // Halt only once the motion profile is done; stopping mid-ramp causes the jerk.
+    if (false && servo_control_is_standstill(stepper->servo_control) && fabs(steps_per_second) < MIN_STEP_FREQ) {
+        stepper_stop(stepper);
+        return;
+    }
+
+    stepper_update_speed(stepper, steps_per_second);
 }
 
 bool stepper_is_active(stepper_t* stepper) {
@@ -93,22 +100,25 @@ void stepper_stop(stepper_t* stepper) {
     stepper->enable = false;
 }
 
-void stepper_update_speed(stepper_t* stepper, int32_t speed) {
-    // Use abs() for proper signed to unsigned conversion
-    uint32_t abs_speed = (speed >= 0) ? (uint32_t)speed : (uint32_t)(-speed);
-    bool direction = (speed >= 0);
-    
+void stepper_update_speed(stepper_t* stepper, float speed)
+{
+    float abs_speed = fabsf(speed);
+    bool direction = speed >= 0.0f;
+
     update_step_generator(stepper, abs_speed, direction);
 }
 
-void update_step_generator(stepper_t* stepper, uint32_t freq, bool direction) {
-    if (freq <= 0.05) {
+void update_step_generator(stepper_t* stepper, float freq, bool direction)
+{
+    if (freq < MIN_STEP_FREQ) {
         stepper_stop(stepper);
         return;
     }
-    
-    uint32_t delay = (clock_get_hz(clk_sys) / (2 * freq)) - 3;
 
+    float delay_f = ((float)clock_get_hz(clk_sys) / (2.0f * freq)) - 3.0f;
+
+    uint32_t delay = (uint32_t)delay_f;
+    
     if (stepper->enable) {
         step_generator_update_freq(stepping_pio, stepper->sm, delay);
     }
@@ -134,4 +144,8 @@ void stepper_change_acc(stepper_t* stepper, float acc) {
 
 bool stepper_is_standstill(stepper_t* stepper) {
     return servo_control_is_standstill(stepper->servo_control);
+}
+
+int32_t stepper_get_step_count(stepper_t* stepper) {
+    return stepdir_counter_get_count(pio0, stepper->sm);
 }

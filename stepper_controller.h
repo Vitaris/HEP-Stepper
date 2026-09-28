@@ -45,7 +45,7 @@ void stepper_stop(stepper_t* stepper);
  * @param stepper Pointer to the stepper_t structure.
  * @param speed   New speed value (steps per second or similar unit).
  */
-void stepper_update_speed(stepper_t* stepper, int32_t speed);
+void stepper_update_speed(stepper_t* stepper, float speed);
 
 /**
  * @brief Get the current position of the stepper motor.
@@ -58,5 +58,6 @@ int32_t stepper_get_position(stepper_t* stepper);
 void stepper_goto(stepper_t* stepper, float position, float speed);
 void stepper_change_acc(stepper_t* stepper, float acc);
 bool stepper_is_standstill(stepper_t* stepper);
+int32_t stepper_get_step_count(stepper_t* stepper);
 
 #endif // STEPPER_CONTROLLER_H
