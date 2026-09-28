@@ -40,6 +40,7 @@ add_executable(hep_stepper
         tmc_interface.c
         stepper_controller.c
         servo_control.c
+        core1_main.c
         )
 
 pico_generate_pio_header(hep_stepper ${CMAKE_CURRENT_LIST_DIR}/step_generator.pio)
@@ -52,7 +53,8 @@ pico_enable_stdio_uart(hep_stepper 0)
 # Pull in basic dependencies
 target_link_libraries(hep_stepper pico_stdlib 
         hardware_spi
-        hardware_pio)
+        hardware_pio
+        pico_multicore)
 
 # create map/bin/hex file etc.
 pico_add_extra_outputs(hep_stepper)

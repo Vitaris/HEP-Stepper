@@ -1,16 +1,19 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
+#include "pico/multicore.h"
+#include "core1_main.h"
 
 #include "common.h"
 #include "tmc2130.h"
 #include "stepper_controller.h"
+#include "servo_control.h"
 
 #define DRV_EN 11   // driver enable pin (active low)
 
 // Timers
 struct repeating_timer servo_timer;
 
-stepper_t *stepper;
+stepper_t * volatile stepper;
 bool direction = true;
 
 // Helper: write a 32-bit value to a TMC2130 register.
@@ -39,9 +42,13 @@ bool servo_timer_callback(struct repeating_timer *t) {
 
 int main() {
     stdio_init_all();
-    stepper = stepper_init(9, 0, 200.0, 512.0, 100.0, 50.0);
+    stepper = stepper_init(9, 0, 200.0, 256.0, 100.0, 50.0);
     // Timer for servo control
     add_repeating_timer_ms(-1, servo_timer_callback, NULL, &servo_timer);
+
+    // Pass stepper pointer to Core 1
+    multicore_launch_core1(core1_main);
+
     sleep_ms(2000);
 
     printf("SPI master pre TMC2130 startuje...\n");
@@ -65,45 +72,45 @@ int main() {
     sleep_ms(10);
 
     while (true) {
-        printf("--- New cycle ---\n");
+        // printf("--- New cycle ---\n");
 
-        TMC2130_ioin_reg_t ioin = { .value = read_reg(motor, TMC2130Reg_IOIN) };
+        // TMC2130_ioin_reg_t ioin = { .value = read_reg(motor, TMC2130Reg_IOIN) };
 
-        printf("IOIN = 0x%08lx\n", ioin.value);
-        printf("  STEP      = %lu\n", ioin.step);
-        printf("  DIR       = %lu\n", ioin.dir);
-        printf("  DCEN_CFG4 = %lu\n", ioin.dcen_cfg4);
-        printf("  DCEN_CFG5 = %lu\n", ioin.dcen_cfg5);
-        printf("  DRV_ENN   = %lu\n", ioin.drv_enn_cfg6);
-        printf("  DCO       = %lu\n", ioin.dco);
-        printf("  version   = 0x%02lx\n", ioin.version);
+        // printf("IOIN = 0x%08lx\n", ioin.value);
+        // printf("  STEP      = %lu\n", ioin.step);
+        // printf("  DIR       = %lu\n", ioin.dir);
+        // printf("  DCEN_CFG4 = %lu\n", ioin.dcen_cfg4);
+        // printf("  DCEN_CFG5 = %lu\n", ioin.dcen_cfg5);
+        // printf("  DRV_ENN   = %lu\n", ioin.drv_enn_cfg6);
+        // printf("  DCO       = %lu\n", ioin.dco);
+        // printf("  version   = 0x%02lx\n", ioin.version);
 
-        if(ioin.version != 0x11)
-            printf("  Warning: Unexpected version (COMM error?)\n");
+        // if(ioin.version != 0x11)
+        //     printf("  Warning: Unexpected version (COMM error?)\n");
 
-        TMC2130_drv_status_reg_t drv = { .value = read_reg(motor, TMC2130Reg_DRV_STATUS) };
+        // TMC2130_drv_status_reg_t drv = { .value = read_reg(motor, TMC2130Reg_DRV_STATUS) };
 
-        printf("DRV_STATUS = 0x%08lx\n", drv.value);
-        printf("  SG_RESULT (load) = %lu\n", drv.sg_result);
-        printf("  CS_ACTUAL (prud) = %lu/31\n", drv.cs_actual);
-        printf("  standstill = %lu\n", drv.stst);
-        if(drv.ot)   printf("  ERROR: Overtemperature (OT)\n");
-        if(drv.otpw) printf("  WARNING: Temperature (OTPW)\n");
-        if(drv.s2ga || drv.s2gb) printf("  ERROR: Short circuit\n");
-        if(drv.ola || drv.olb)   printf("  WARNING: Open load\n");
+        // printf("DRV_STATUS = 0x%08lx\n", drv.value);
+        // printf("  SG_RESULT (load) = %lu\n", drv.sg_result);
+        // printf("  CS_ACTUAL (prud) = %lu/31\n", drv.cs_actual);
+        // printf("  standstill = %lu\n", drv.stst);
+        // if(drv.ot)   printf("  ERROR: Overtemperature (OT)\n");
+        // if(drv.otpw) printf("  WARNING: Temperature (OTPW)\n");
+        // if(drv.s2ga || drv.s2gb) printf("  ERROR: Short circuit\n");
+        // if(drv.ola || drv.olb)   printf("  WARNING: Open load\n");
 
-        uint32_t lost = read_reg(motor, TMC2130Reg_LOST_STEPS);
+        // uint32_t lost = read_reg(motor, TMC2130Reg_LOST_STEPS);
 
-        if (lost != 0) {
-            printf("ERROR: DcStep lost steps = %lu\n", lost);
-        }
+        // if (lost != 0) {
+        //     printf("ERROR: DcStep lost steps = %lu\n", lost);
+        // }
 
         if (stepper_is_standstill(stepper)) {
             if (direction) {
-                stepper_goto(stepper, stepper_get_position(stepper) + 1.0, 0.2);
+                stepper_goto(stepper, 1.0, 0.2);
                 direction = false;
             } else {
-                stepper_goto(stepper, stepper_get_position(stepper) - 1.0, 10.0);
+                stepper_goto(stepper, 0.0, 1.0);
                 direction = true;
             }
         }
