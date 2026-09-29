@@ -15,8 +15,8 @@ static bool pio_initialized = false;
 static uint step_generator_offset = 0; 
 static uint offset_encoder = 0;
 
-static pio_hw_t* stepping_pio = pio0;
-static pio_hw_t* encoder_pio = pio1;
+static pio_hw_t* const stepping_pio = pio0;
+static pio_hw_t* const encoder_pio = pio1;
 
 struct stepper {
     bool steppping_is_active;
@@ -44,7 +44,7 @@ stepper_t* stepper_init(const uint8_t pin, const uint8_t sm,
     stepper->max_speed = max_speed;
     stepper->max_acceleration = max_acceleration;
 
-    stepper->servo_control = servo_control_init(&stepper->position, &stepper->enable);
+    stepper->servo_control = servo_control_init(&stepper->position, &stepper->enable, max_speed, max_acceleration, 1.0);
 
     if (!pio_initialized) {
         pio_clear_instruction_memory(stepping_pio);     // Clear pio0

@@ -42,7 +42,7 @@ bool servo_timer_callback(struct repeating_timer *t) {
 
 int main() {
     stdio_init_all();
-    stepper = stepper_init(9, 0, 200.0, 256.0, 100.0, 50.0);
+    stepper = stepper_init(9, 0, 200.0, 256.0, 50.0, 100.0);
     // Timer for servo control
     add_repeating_timer_ms(-1, servo_timer_callback, NULL, &servo_timer);
 
@@ -107,10 +107,10 @@ int main() {
 
         if (stepper_is_standstill(stepper)) {
             if (direction) {
-                stepper_goto(stepper, 1.0, 0.2);
+                stepper_goto(stepper, 20.0, 5.0);
                 direction = false;
             } else {
-                stepper_goto(stepper, 0.0, 1.0);
+                stepper_goto(stepper, 0.0, 20.0);
                 direction = true;
             }
         }

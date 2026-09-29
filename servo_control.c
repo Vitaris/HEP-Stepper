@@ -44,7 +44,7 @@ struct servo_control {
 	float scale;			// Scale factor of the servo_control motor
 };
 
-servo_control_t* servo_control_init(float* current_position, bool* enable) {
+servo_control_t* servo_control_init(float* current_position, bool* enable, float speed, float acc, float scale) {
     servo_control_t* servo_control = calloc(1, sizeof(struct servo_control));
     if (servo_control == NULL) {
         fprintf(stderr, "Failed to allocate memory for servo_control control\n");
@@ -55,11 +55,11 @@ servo_control_t* servo_control_init(float* current_position, bool* enable) {
     servo_control->current_position = current_position;
 
     // Default values
-    servo_control->nominal_speed = 100.0f; // Example default speed
-    servo_control->nominal_acc = 50.0f;    // Example default acceleration
+    servo_control->nominal_speed = speed;
+    servo_control->nominal_acc = acc;
     servo_control->current_speed = servo_control->nominal_speed;
     servo_control->current_acc = servo_control->nominal_acc;
-    servo_control->scale = 1.0f;           // Default scale factor
+    servo_control->scale = scale;
 
     return servo_control;
 }
@@ -69,28 +69,20 @@ void servo_control_compute(servo_control_t* servo_control) {
 }
 
 float get_breaking_distance(const servo_control_t* const servo_control) {
-	return 0.5f * (servo_control->computed_speed * servo_control->computed_speed / servo_control->current_acc);
+	return 0.5f * servo_control->computed_speed * servo_control->computed_speed / fabsf(servo_control->current_acc);
 }
 
 void servo_control_calculate_next_position(servo_control_t* servo_control) {
 	switch(servo_control->positioning) {
-        case IDLE:
+		case IDLE:
 			servo_control->nominal_speed_reached = false;
 			break;
-		
+
 		case REQUESTED:
-			// First occurence of movement request, save the position of movement beginning
-			if (servo_control->next_stop >= *servo_control->current_position) {
-				// Positive direction
-				servo_control->positive_direction = true;
-				servo_control->current_acc = servo_control->nominal_acc;
-				servo_control->current_speed = servo_control->nominal_speed;
-			} else {
-				// Negative direction
-				servo_control->positive_direction = false;
-				servo_control->current_acc = -servo_control->nominal_acc;
-				servo_control->current_speed = -servo_control->nominal_speed;
-			}
+			servo_control->positive_direction = servo_control->next_stop >= *servo_control->current_position;
+			servo_control->current_acc = servo_control->positive_direction ? servo_control->nominal_acc : -servo_control->nominal_acc;
+			servo_control->current_speed = servo_control->positive_direction ? servo_control->nominal_speed : -servo_control->nominal_speed;
+
 			if (servo_control->delay_start > 0) {
 				servo_control->delay_start--;
 				break;
@@ -102,24 +94,15 @@ void servo_control_calculate_next_position(servo_control_t* servo_control) {
 		case ACCELERATING:
 			servo_control->computed_speed += servo_control->current_acc * CYCLE_TIME;
 
-			// check if nominal speed has been reached
 			if (fabsf(servo_control->computed_speed) > fabsf(servo_control->current_speed)) {
 				servo_control->nominal_speed_reached = true;
 				servo_control->computed_speed = servo_control->current_speed;
 			}
 
-			// Compute position for next cycle time
 			servo_control->next_position += servo_control->computed_speed * CYCLE_TIME;
 
-			// Check if braking is needed
-			if (servo_control->positive_direction) {
-				if (servo_control->next_stop - servo_control->next_position < get_breaking_distance(servo_control)) {
-					servo_control->positioning = BRAKING;
-				}
-			} else {
-				if (servo_control->next_stop - servo_control->next_position > get_breaking_distance(servo_control)) {
-					servo_control->positioning = BRAKING;
-				}
+			if (fabsf(servo_control->next_stop - servo_control->next_position) < get_breaking_distance(servo_control)) {
+				servo_control->positioning = BRAKING;
 			}
 			break;
 
@@ -127,16 +110,10 @@ void servo_control_calculate_next_position(servo_control_t* servo_control) {
 			servo_control->computed_speed -= servo_control->current_acc * CYCLE_TIME;
 			servo_control->next_position += servo_control->computed_speed * CYCLE_TIME;
 			servo_control->nominal_speed_reached = false;
-			
-			// Check if desired position has been reached
-			if (servo_control->positive_direction) {
-				if (servo_control->computed_speed <= 0.0f) {
-					servo_control->positioning = POSITION_REACHED;
-				}
-			} else {
-				if (servo_control->computed_speed >= 0.0f) {
-					servo_control->positioning = POSITION_REACHED;
-				}
+
+			// Speed has crossed zero (sign opposite to current_acc) -> motion finished
+			if (servo_control->computed_speed * servo_control->current_acc <= 0.0f) {
+				servo_control->positioning = POSITION_REACHED;
 			}
 			break;
 
