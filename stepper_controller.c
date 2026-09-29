@@ -26,6 +26,7 @@ struct stepper {
     uint8_t sm;
     uint8_t pin;
     uint32_t step;
+    int32_t steps_count;
     float position;
     float microsteps_per_rev;
     float max_speed;
@@ -70,10 +71,10 @@ stepper_t* stepper_init(const uint8_t pin, const uint8_t sm,
 }
 
 void stepper_compute(stepper_t* const stepper) {
-    int32_t steps_count = stepdir_counter_get_count(encoder_pio, stepper->sm);
+    stepper->steps_count = stepdir_counter_get_count(encoder_pio, stepper->sm);
 
     // Convert to steps, steps per revolution, microsteps
-    stepper->position = (float)(steps_count) / stepper->microsteps_per_rev; 
+    stepper->position = (float)(stepper->steps_count) / stepper->microsteps_per_rev; 
 
     // Compute the next position based on the servo control logic
     servo_control_compute(stepper->servo_control);
@@ -146,5 +147,5 @@ bool stepper_is_standstill(stepper_t* stepper) {
 }
 
 int32_t stepper_get_step_count(stepper_t* stepper) {
-    return stepdir_counter_get_count(pio0, stepper->sm);
+    return stepper->steps_count;
 }
