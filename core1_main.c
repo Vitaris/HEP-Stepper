@@ -42,8 +42,7 @@ void core1_main(void) {
             
             // Print safely in the main thread context
             if (stepper != NULL) {
-                printf("Error: Stepper is NOT NULL\n");
-                // printf("Position: %" PRId32 "\n", stepper_get_step_count(stepper));
+                printf("Position: %" PRId32 "\n", stepper_get_step_count(stepper));
             } else {
                 printf("Error: Stepper is NULL\n");
             }
