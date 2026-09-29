@@ -11,8 +11,6 @@
 #define CYCLE_TIME 0.001f // 1 ms cycle time
 #define MIN_STEP_FREQ 0.025f  // steps/s; below this the axis is treated as stopped (avoids div-by-zero / huge delays)
 
-void update_step_generator(stepper_t* stepper, float freq, bool direction);
-
 static bool pio_initialized = false;
 static uint step_generator_offset = 0; 
 static uint offset_encoder = 0;
@@ -101,13 +99,6 @@ void stepper_stop(stepper_t* stepper) {
     stepper->enable = false;
 }
 
-void stepper_update_speed(stepper_t* stepper, float speed)
-{
-    float abs_speed = fabsf(speed);
-    bool direction = speed >= 0.0f;
-
-    update_step_generator(stepper, abs_speed, direction);
-}
 
 void update_step_generator(stepper_t* stepper, float freq, bool direction)
 {
@@ -129,6 +120,14 @@ void update_step_generator(stepper_t* stepper, float freq, bool direction)
         step_generator_init_stepping(stepping_pio, stepper->sm, delay);
         stepper->enable = true;
     }
+}
+
+void stepper_update_speed(stepper_t* stepper, float speed)
+{
+    float abs_speed = fabsf(speed);
+    bool direction = speed >= 0.0f;
+
+    update_step_generator(stepper, abs_speed, direction);
 }
 
 int32_t stepper_get_position(stepper_t* stepper) {
