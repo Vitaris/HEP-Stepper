@@ -116,9 +116,11 @@ void update_step_generator(stepper_t* stepper, float freq, bool direction)
     }
 
     float delay_f = ((float)clock_get_hz(clk_sys) / (2.0f * freq)) - 3.0f;
-
     uint32_t delay = (uint32_t)delay_f;
     
+    // Set the direction pin
+    gpio_put(stepper->pin + 1, direction);
+
     if (stepper->enable) {
         step_generator_update_freq(stepping_pio, stepper->sm, delay);
     }
@@ -126,9 +128,6 @@ void update_step_generator(stepper_t* stepper, float freq, bool direction)
         step_generator_init_stepping(stepping_pio, stepper->sm, delay);
         stepper->enable = true;
     }
-
-    // Set the direction pin
-    gpio_put(stepper->pin + 1, direction);
 }
 
 int32_t stepper_get_position(stepper_t* stepper) {
