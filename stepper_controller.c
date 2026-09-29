@@ -8,7 +8,7 @@
 #include "servo_control.h"
 #include <math.h>
 
-#define CYCLE_TIME 0.001 // 1 ms cycle time
+#define CYCLE_TIME 0.001f // 1 ms cycle time
 #define MIN_STEP_FREQ 0.025f  // steps/s; below this the axis is treated as stopped (avoids div-by-zero / huge delays)
 
 void update_step_generator(stepper_t* stepper, float freq, bool direction);
@@ -81,10 +81,10 @@ void stepper_compute(stepper_t* const stepper) {
 
     // Calculate the speed based on the next position
     float position_error = servo_control_get_next_position(stepper->servo_control) - stepper->position;
-    float steps_per_second = position_error * stepper->microsteps_per_rev * 0.5 / CYCLE_TIME;
+    float steps_per_second = position_error * stepper->microsteps_per_rev * 0.5f / CYCLE_TIME;
 
     // Halt only once the motion profile is done; stopping mid-ramp causes the jerk.
-    if (false && servo_control_is_standstill(stepper->servo_control) && fabs(steps_per_second) < MIN_STEP_FREQ) {
+    if (false && servo_control_is_standstill(stepper->servo_control) && fabsf(steps_per_second) < MIN_STEP_FREQ) {
         stepper_stop(stepper);
         return;
     }

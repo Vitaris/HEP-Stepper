@@ -5,7 +5,7 @@
 #include <math.h>
 #include "servo_control.h"
 
-#define CYCLE_TIME 0.001
+#define CYCLE_TIME 0.001f
 #define FOLLOWING_ERROR 1.0 // Maximum permisible position deviation
 
 void servo_control_calculate_next_position(servo_control_t* servo_control);
@@ -69,7 +69,7 @@ void servo_control_compute(servo_control_t* servo_control) {
 }
 
 float get_breaking_distance(const servo_control_t* const servo_control) {
-	return 0.5 * (pow(servo_control->computed_speed, 2) / servo_control->current_acc);
+	return 0.5f * (servo_control->computed_speed * servo_control->computed_speed / servo_control->current_acc);
 }
 
 void servo_control_calculate_next_position(servo_control_t* servo_control) {
@@ -95,7 +95,7 @@ void servo_control_calculate_next_position(servo_control_t* servo_control) {
 				servo_control->delay_start--;
 				break;
 			}
-			servo_control->computed_speed = 0.0;
+			servo_control->computed_speed = 0.0f;
 			servo_control->positioning = ACCELERATING;
 			break;
 
@@ -103,7 +103,7 @@ void servo_control_calculate_next_position(servo_control_t* servo_control) {
 			servo_control->computed_speed += servo_control->current_acc * CYCLE_TIME;
 
 			// check if nominal speed has been reached
-			if (fabs(servo_control->computed_speed) > fabs(servo_control->current_speed)) {
+			if (fabsf(servo_control->computed_speed) > fabsf(servo_control->current_speed)) {
 				servo_control->nominal_speed_reached = true;
 				servo_control->computed_speed = servo_control->current_speed;
 			}
@@ -130,11 +130,11 @@ void servo_control_calculate_next_position(servo_control_t* servo_control) {
 			
 			// Check if desired position has been reached
 			if (servo_control->positive_direction) {
-				if (servo_control->computed_speed <= 0.0) {
+				if (servo_control->computed_speed <= 0.0f) {
 					servo_control->positioning = POSITION_REACHED;
 				}
 			} else {
-				if (servo_control->computed_speed >= 0.0) {
+				if (servo_control->computed_speed >= 0.0f) {
 					servo_control->positioning = POSITION_REACHED;
 				}
 			}
