@@ -7,7 +7,7 @@ typedef struct stepper stepper_t;
 /**
  * @brief Initialize a stepper motor controller.
  * 
- * @param pin GPIO pin used for the step signal.
+ * @param pin GPIO pin used for the step signal (DIR is pin + 1).
  * @param sm  PIO state machine number to use.
  * @return Pointer to the initialized stepper_t structure.
  */

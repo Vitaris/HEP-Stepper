@@ -1,0 +1,82 @@
+; Step/dir generator with built-in position counter (RP2040 + RP2350).
+; OSR holds the command: bits 31..1 = half-period delay, bit 0 = DIR. Y holds the position.
+; STEP is side-set; DIR is the OUT pin and also the JMP pin (read back to choose the count direction).
+
+.program stepdir
+.side_set 1 opt
+
+.wrap_target
+    mov x, osr          side 0      ; STEP falling edge
+    pull noblock                    ; newest command, or keep the current one (X)
+    mov pins, osr                   ; DIR changes only while STEP is low
+    mov x, osr
+low:
+    jmp x--, low
+    jmp pin, step_up
+    jmp y--, high       side 1 [3]  ; STEP rising edge + Y-- in one cycle; [3] matches step_up
+high:
+    mov x, osr
+    pull noblock
+    mov x, osr
+high_loop:
+    jmp x--, high_loop
+.wrap
+
+step_up:                            ; Y + 1 == ~(~Y - 1)
+    mov x, ~y
+    jmp x--, step_up_done
+step_up_done:
+    mov y, ~x           side 1      ; STEP rising edge + Y++ in one cycle
+    jmp high
+
+
+% c-sdk {
+
+#include "hardware/clocks.h"
+
+// pin = STEP, pin + 1 = DIR; the state machine is left stopped
+static inline void stepdir_program_init(PIO pio, uint sm, uint offset, uint pin)
+{
+    pio_gpio_init(pio, pin);
+    pio_gpio_init(pio, pin + 1);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 2, true);
+
+    pio_sm_config c = stepdir_program_get_default_config(offset);
+    sm_config_set_sideset_pins(&c, pin);
+    sm_config_set_out_pins(&c, pin + 1, 1);
+    sm_config_set_jmp_pin(&c, pin + 1);
+    pio_sm_init(pio, sm, offset, &c);
+}
+
+// Picked up at the start of the next half period
+static inline void stepdir_set_speed(PIO pio, uint sm, float freq, bool dir)
+{
+    // a step period takes 2 * delay + 14 cycles
+    float delay = (float)clock_get_hz(clk_sys) / (2.0f * freq) - 7.0f;
+    uint32_t cmd = delay > 0.0f ? (uint32_t)delay : 0;
+    pio_sm_clear_fifos(pio, sm);
+    pio_sm_put(pio, sm, (cmd & ~1u) | dir);
+}
+
+// Starts from the top, so a long delay left over from before the stop isn't finished first
+static inline void stepdir_start(PIO pio, uint sm, uint offset, float freq, bool dir)
+{
+    stepdir_set_speed(pio, sm, freq, dir);
+    pio_sm_exec(pio, sm, pio_encode_jmp(offset));
+    pio_sm_set_enabled(pio, sm, true);
+}
+
+static inline void stepdir_stop(PIO pio, uint sm)
+{
+    pio_sm_set_enabled(pio, sm, false);
+}
+
+// Works running or stopped; the injected instructions cost the SM one cycle each and never stall it
+static inline int32_t stepdir_get_position(PIO pio, uint sm)
+{
+    pio_sm_exec(pio, sm, pio_encode_mov(pio_isr, pio_y));
+    pio_sm_exec(pio, sm, pio_encode_push(false, false));
+    return (int32_t)pio_sm_get_blocking(pio, sm);
+}
+
+%}

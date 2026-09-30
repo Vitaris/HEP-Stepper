@@ -43,8 +43,7 @@ add_executable(hep_stepper
         core1_main.c
         )
 
-pico_generate_pio_header(hep_stepper ${CMAKE_CURRENT_LIST_DIR}/step_generator.pio)
-pico_generate_pio_header(hep_stepper ${CMAKE_CURRENT_LIST_DIR}/stepdir_counter.pio)
+pico_generate_pio_header(hep_stepper ${CMAKE_CURRENT_LIST_DIR}/stepdir.pio)
 
 # enable usb output, disable uart output
 pico_enable_stdio_usb(hep_stepper 1)

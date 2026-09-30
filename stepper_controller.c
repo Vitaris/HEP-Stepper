@@ -3,8 +3,7 @@
 #include <stdlib.h>  
 #include "hardware/pio.h"
 #include "stepper_controller.h"
-#include "stepdir_counter.pio.h"
-#include "step_generator.pio.h"
+#include "stepdir.pio.h"
 #include "servo_control.h"
 #include <math.h>
 
@@ -12,11 +11,9 @@
 #define MIN_STEP_FREQ 0.025f  // steps/s; below this the axis is treated as stopped (avoids div-by-zero / huge delays)
 
 static bool pio_initialized = false;
-static uint step_generator_offset = 0; 
-static uint offset_encoder = 0;
+static uint stepdir_offset = 0;
 
-static pio_hw_t* const stepping_pio = pio0;
-static pio_hw_t* const encoder_pio = pio1;
+static pio_hw_t* stepping_pio = pio0;
 
 struct stepper {
     bool steppping_is_active;
@@ -48,28 +45,18 @@ stepper_t* stepper_init(const uint8_t pin, const uint8_t sm,
 
     if (!pio_initialized) {
         pio_clear_instruction_memory(stepping_pio);     // Clear pio0
-        pio_clear_instruction_memory(encoder_pio);    // Clear pio1
-
-        step_generator_offset = pio_add_program(stepping_pio, &step_generator_program);
-        offset_encoder = pio_add_program(encoder_pio, &stepdir_counter_program);
+        stepdir_offset = pio_add_program(stepping_pio, &stepdir_program);
         pio_initialized = true;
     }
 
-    // Step Generator
-    step_generator_program_init(stepping_pio, stepper->sm, step_generator_offset, stepper->pin);
-
-    // Stepper Counter
-    stepdir_counter_program_init(encoder_pio, stepper->sm, offset_encoder, stepper->pin, 0);
-
-    // Set the Direction pin
-    gpio_init(stepper->pin + 1);
-    gpio_set_dir(stepper->pin + 1, GPIO_OUT);
+    // Step/dir generator with position counter (STEP = pin, DIR = pin + 1)
+    stepdir_program_init(stepping_pio, stepper->sm, stepdir_offset, stepper->pin);
 
     return stepper;
 }
 
 void stepper_compute(stepper_t* const stepper) {
-    stepper->steps_count = stepdir_counter_get_count(encoder_pio, stepper->sm);
+    stepper->steps_count = stepdir_get_position(stepping_pio, stepper->sm);
 
     // Convert to steps, steps per revolution, microsteps
     stepper->position = (float)(stepper->steps_count) / stepper->microsteps_per_rev; 
@@ -95,7 +82,7 @@ bool stepper_is_active(stepper_t* stepper) {
 }
 
 void stepper_stop(stepper_t* stepper) {
-    step_generator_stop(stepping_pio, stepper->sm);
+    stepdir_stop(stepping_pio, stepper->sm);
     stepper->enable = false;
 }
 
@@ -107,17 +94,11 @@ void update_step_generator(stepper_t* stepper, float freq, bool direction)
         return;
     }
 
-    float delay_f = ((float)clock_get_hz(clk_sys) / (2.0f * freq)) - 3.0f;
-    uint32_t delay = (uint32_t)delay_f;
-    
-    // Set the direction pin
-    gpio_put(stepper->pin + 1, direction);
-
     if (stepper->enable) {
-        step_generator_update_freq(stepping_pio, stepper->sm, delay);
+        stepdir_set_speed(stepping_pio, stepper->sm, freq, direction);
     }
     else {
-        step_generator_init_stepping(stepping_pio, stepper->sm, delay);
+        stepdir_start(stepping_pio, stepper->sm, stepdir_offset, freq, direction);
         stepper->enable = true;
     }
 }
